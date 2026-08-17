@@ -6,6 +6,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { mcpAuthRouter, getOAuthProtectedResourceMetadataUrl } from "@modelcontextprotocol/sdk/server/auth/router.js";
 import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
+import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { checkResourceAllowed, resourceUrlFromServerUrl } from "@modelcontextprotocol/sdk/shared/auth-utils.js";
@@ -1681,12 +1682,17 @@ export function createServer(
   const transports = new McpSessionRegistry<Transport>();
   const mcpUrl = new URL("/mcp", config.publicBaseUrl);
   const resourceServerUrl = resourceUrlFromServerUrl(mcpUrl);
-  const oauthProvider = new SingleUserOAuthProvider(config.oauth, mcpUrl, config.stateDir);
-  const bearerAuth = requireBearerAuth({
-    verifier: oauthProvider,
-    requiredScopes: [config.oauth.scopes[0] ?? "devspace"],
-    resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(resourceServerUrl),
-  });
+  const authOff = config.authMode === "off";
+  const oauthProvider = authOff
+    ? undefined
+    : new SingleUserOAuthProvider(config.oauth, mcpUrl, config.stateDir);
+  const bearerAuth = oauthProvider
+    ? requireBearerAuth({
+        verifier: oauthProvider,
+        requiredScopes: [config.oauth.scopes[0] ?? "devspace"],
+        resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(resourceServerUrl),
+      })
+    : undefined;
   const workspaceStore = createWorkspaceStore(config.stateDir);
   const workspaces = new WorkspaceRegistry(config, workspaceStore);
   const reviewCheckpoints = createReviewCheckpointManager();
@@ -1753,16 +1759,18 @@ export function createServer(
     next();
   });
 
-  app.use(
-    mcpAuthRouter({
-      provider: oauthProvider,
-      issuerUrl: new URL(config.publicBaseUrl),
-      baseUrl: new URL(config.publicBaseUrl),
-      resourceServerUrl,
-      scopesSupported: config.oauth.scopes,
-      resourceName: "DevSpace",
-    }),
-  );
+  if (oauthProvider) {
+    app.use(
+      mcpAuthRouter({
+        provider: oauthProvider,
+        issuerUrl: new URL(config.publicBaseUrl),
+        baseUrl: new URL(config.publicBaseUrl),
+        resourceServerUrl,
+        scopesSupported: config.oauth.scopes,
+        resourceName: "DevSpace",
+      }),
+    );
+  }
 
   app.options("/mcp-app-assets/{*asset}", (_req, res) => {
     setAssetHeaders(res);
@@ -1788,24 +1796,33 @@ export function createServer(
     const sessionId = req.header("mcp-session-id");
     const initializeRequest = req.method === "POST" && isInitializeRequest(req.body);
 
-    await new Promise<void>((resolve, reject) => {
-      bearerAuth(req, res, (error?: unknown) => {
-        if (error) reject(error);
-        else resolve();
+    if (authOff) {
+      (req as Request & { auth?: AuthInfo }).auth = {
+        token: "disabled",
+        clientId: "local",
+        scopes: config.oauth.scopes,
+        resource: resourceServerUrl,
+      };
+    } else {
+      await new Promise<void>((resolve, reject) => {
+        bearerAuth!(req, res, (error?: unknown) => {
+          if (error) reject(error);
+          else resolve();
+        });
       });
-    });
-    if (res.headersSent) return;
+      if (res.headersSent) return;
 
-    if (!req.auth?.resource || !checkResourceAllowed({ requestedResource: req.auth.resource, configuredResource: resourceServerUrl })) {
-      logEvent(config.logging, "warn", "auth_denied", {
-        requestId,
-        method: req.method,
-        path: requestPath(req),
-        reason: "invalid_oauth_resource",
-        ...requestLogFields(req, config),
-      });
-      sendJsonRpcError(res, 401, -32001, "Unauthorized");
-      return;
+      if (!req.auth?.resource || !checkResourceAllowed({ requestedResource: req.auth.resource, configuredResource: resourceServerUrl })) {
+        logEvent(config.logging, "warn", "auth_denied", {
+          requestId,
+          method: req.method,
+          path: requestPath(req),
+          reason: "invalid_oauth_resource",
+          ...requestLogFields(req, config),
+        });
+        sendJsonRpcError(res, 401, -32001, "Unauthorized");
+        return;
+      }
     }
 
     logEvent(config.logging, "debug", "mcp_request", {
@@ -1885,7 +1902,7 @@ export function createServer(
         const results = await transports.closeAll();
         logSessionCloseResults("server_shutdown", results);
         processSessions.shutdown();
-        oauthProvider.close();
+        oauthProvider?.close();
         workspaceStore.close?.();
       })();
       return closePromise;

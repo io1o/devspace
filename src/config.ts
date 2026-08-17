@@ -3,9 +3,10 @@ import { join, resolve } from "node:path";
 import { expandHomePath } from "./roots.js";
 import type { LoggingConfig, LogFormat, LogLevel } from "./logger.js";
 import type { OAuthConfig } from "./oauth-provider.js";
-import { devspaceAgentsDir, devspaceSkillsDir, loadDevspaceFiles } from "./user-config.js";
+import { devspaceAgentsDir, devspaceSkillsDir, loadDevspaceFiles, type DevspaceAuthMode, type DevspaceFiles } from "./user-config.js";
 
 export type ToolMode = "minimal" | "full" | "codex";
+export type AuthMode = DevspaceAuthMode;
 export type WidgetMode = "off" | "changes" | "full";
 const DEFAULT_OAUTH_ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
 const DEFAULT_OAUTH_REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
@@ -14,6 +15,7 @@ const DEFAULT_ARTIFACT_MAX_FILE_BYTES = 100 * 1024 * 1024;
 export interface ServerConfig {
   host: string;
   port: number;
+  authMode: AuthMode;
   oauth: OAuthConfig;
   allowedRoots: string[];
   allowedHosts: string[];
@@ -173,29 +175,57 @@ function parseRequiredSecret(value: string | undefined, name: string): string {
   return secret;
 }
 
-function parseOAuthConfig(env: NodeJS.ProcessEnv, ownerToken: string | undefined): OAuthConfig {
+function parseAuthMode(env: NodeJS.ProcessEnv, files: DevspaceFiles): AuthMode {
+  const raw = (env.DEVSPACE_AUTH ?? files.config.auth ?? "oauth").toString().trim().toLowerCase();
+  if (raw === "off" || raw === "none" || raw === "disabled" || raw === "0" || raw === "false") {
+    return "off";
+  }
+  if (raw === "oauth" || raw === "on" || raw === "1" || raw === "true") {
+    return "oauth";
+  }
+  throw new Error(`Invalid DEVSPACE_AUTH: ${raw}`);
+}
+
+function parseOAuthConfig(
+  env: NodeJS.ProcessEnv,
+  ownerToken: string | undefined,
+  authMode: AuthMode,
+): OAuthConfig {
+  const scopes = parseStringList(env.DEVSPACE_OAUTH_SCOPES, ["devspace"]);
+  const allowedRedirectHosts = parseStringList(env.DEVSPACE_OAUTH_ALLOWED_REDIRECT_HOSTS, [
+    "chatgpt.com",
+    "localhost",
+    "127.0.0.1",
+    "www.cursor.com",
+    "cursor.com",
+    "anysphere.cursor-mcp",
+    "mcp",
+  ]);
+  const accessTokenTtlSeconds = parsePositiveInteger(
+    env.DEVSPACE_OAUTH_ACCESS_TOKEN_TTL_SECONDS,
+    DEFAULT_OAUTH_ACCESS_TOKEN_TTL_SECONDS,
+    "DEVSPACE_OAUTH_ACCESS_TOKEN_TTL_SECONDS",
+  );
+  const refreshTokenTtlSeconds = parsePositiveInteger(
+    env.DEVSPACE_OAUTH_REFRESH_TOKEN_TTL_SECONDS,
+    DEFAULT_OAUTH_REFRESH_TOKEN_TTL_SECONDS,
+    "DEVSPACE_OAUTH_REFRESH_TOKEN_TTL_SECONDS",
+  );
+  if (authMode === "off") {
+    return {
+      ownerToken: env.DEVSPACE_OAUTH_OWNER_TOKEN ?? ownerToken ?? "oauth-disabled-placeholder",
+      accessTokenTtlSeconds,
+      refreshTokenTtlSeconds,
+      scopes,
+      allowedRedirectHosts,
+    };
+  }
   return {
     ownerToken: parseRequiredSecret(env.DEVSPACE_OAUTH_OWNER_TOKEN ?? ownerToken, "DEVSPACE_OAUTH_OWNER_TOKEN"),
-    accessTokenTtlSeconds: parsePositiveInteger(
-      env.DEVSPACE_OAUTH_ACCESS_TOKEN_TTL_SECONDS,
-      DEFAULT_OAUTH_ACCESS_TOKEN_TTL_SECONDS,
-      "DEVSPACE_OAUTH_ACCESS_TOKEN_TTL_SECONDS",
-    ),
-    refreshTokenTtlSeconds: parsePositiveInteger(
-      env.DEVSPACE_OAUTH_REFRESH_TOKEN_TTL_SECONDS,
-      DEFAULT_OAUTH_REFRESH_TOKEN_TTL_SECONDS,
-      "DEVSPACE_OAUTH_REFRESH_TOKEN_TTL_SECONDS",
-    ),
-    scopes: parseStringList(env.DEVSPACE_OAUTH_SCOPES, ["devspace"]),
-    allowedRedirectHosts: parseStringList(env.DEVSPACE_OAUTH_ALLOWED_REDIRECT_HOSTS, [
-      "chatgpt.com",
-      "localhost",
-      "127.0.0.1",
-      "www.cursor.com",
-      "cursor.com",
-      "anysphere.cursor-mcp",
-      "mcp",
-    ]),
+    accessTokenTtlSeconds,
+    refreshTokenTtlSeconds,
+    scopes,
+    allowedRedirectHosts,
   };
 }
 
@@ -226,11 +256,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     new URL(publicBaseUrl).hostname,
     ...(files.config.allowedHosts ?? []),
   ];
+  const authMode = parseAuthMode(env, files);
 
   return {
     host,
     port,
-    oauth: parseOAuthConfig(env, files.auth.ownerToken),
+    authMode,
+    oauth: parseOAuthConfig(env, files.auth.ownerToken, authMode),
     allowedRoots: parseAllowedRoots(env.DEVSPACE_ALLOWED_ROOTS ?? files.config.allowedRoots),
     allowedHosts: parseAllowedHosts(env.DEVSPACE_ALLOWED_HOSTS, derivedAllowedHosts),
     publicBaseUrl,

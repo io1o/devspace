@@ -9,12 +9,16 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { expandHomePath } from "./roots.js";
 
+export type DevspaceAuthMode = "oauth" | "off";
+
 export interface DevspaceUserConfig {
   host?: string;
   port?: number;
   allowedRoots?: string[];
   publicBaseUrl?: string | null;
   allowedHosts?: string[];
+  /** "off" 关掉整站 OAuth，只适合 127.0.0.1 且没有公网隧道。 */
+  auth?: DevspaceAuthMode;
   stateDir?: string;
   worktreeRoot?: string;
   artifactsEnabled?: boolean;

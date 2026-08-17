@@ -87,6 +87,7 @@ function normalizeCommand(command: string | undefined): Command {
 async function ensureConfigured(): Promise<void> {
   const files = loadDevspaceFiles();
   if (files.configExists && files.authExists) return;
+  if (files.configExists && (files.config.auth === "off" || process.env.DEVSPACE_AUTH === "off")) return;
   if (process.env.DEVSPACE_OAUTH_OWNER_TOKEN) return;
 
   if (!input.isTTY || !output.isTTY) {
@@ -222,7 +223,7 @@ async function serve(): Promise<void> {
     if (config.allowedHosts.includes("*")) {
       console.warn("warning: Host header allowlist is disabled because DEVSPACE_ALLOWED_HOSTS=*");
     }
-    console.log("auth: Owner password approval required");
+    console.log(config.authMode === "off" ? "auth: off" : "auth: Owner password approval required");
     console.log(`logging: ${config.logging.level} ${config.logging.format}`);
     if (config.subagents) {
       console.log(`subagent providers: ${formatLocalAgentProviderAvailabilitySummary(localAgentProviders)}`);
@@ -264,6 +265,7 @@ async function runDoctor(): Promise<void> {
     console.log(`Public MCP URL: ${new URL("/mcp", config.publicBaseUrl).toString()}`);
     console.log(`Allowed roots: ${config.allowedRoots.join(", ")}`);
     console.log(`Allowed hosts: ${config.allowedHosts.join(", ")}`);
+    console.log(`Auth: ${config.authMode}`);
     console.log(`OAuth redirect hosts: ${config.oauth.allowedRedirectHosts.join(", ")}`);
   } catch (error) {
     console.log(`Config status: ${error instanceof Error ? error.message : String(error)}`);

@@ -103,6 +103,16 @@ assert.throws(
   /Invalid DEVSPACE_LOG_FORMAT: color/,
 );
 
+assert.equal(loadConfig(baseEnv).authMode, "oauth");
+assert.equal(loadConfig({ ...baseEnv, DEVSPACE_AUTH: "off" }).authMode, "off");
+assert.equal(
+  loadConfig({ DEVSPACE_CONFIG_DIR: emptyConfigDir, DEVSPACE_ALLOWED_ROOTS: process.cwd(), DEVSPACE_AUTH: "off" }).authMode,
+  "off",
+);
+assert.throws(
+  () => loadConfig({ ...baseEnv, DEVSPACE_AUTH: "maybe" }),
+  /Invalid DEVSPACE_AUTH/,
+);
 assert.equal(loadConfig(baseEnv).oauth.ownerToken, "test-owner-token-that-is-long-enough");
 assert.deepEqual(loadConfig(baseEnv).oauth.scopes, ["devspace"]);
 assert.deepEqual(loadConfig(baseEnv).oauth.allowedRedirectHosts, [
