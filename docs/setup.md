@@ -14,6 +14,11 @@ projects through DevSpace.
 DevSpace does not create the public tunnel for you. Use Cloudflare Tunnel,
 ngrok, Pinggy, Tailscale Funnel, or your own HTTPS reverse proxy.
 
+To expose this machine through a server you already SSH to, see
+[SSH Reverse Proxy](ssh-reverse-proxy.md). That path does not use Cloudflare.
+The SSH tunnel and `devspace serve` both run on the local machine and must be
+started again after reboot or disconnect.
+
 ## Install And Configure
 
 Run:
@@ -129,4 +134,9 @@ npm install --include=dev
 npm run dev
 ```
 
-The same setup rules apply.
+`npm run up` and `npm run up:dev` start `cloudflared`. Skip those when you are
+using your own reverse proxy.
+
+The same setup rules apply. After reboot or an SSH drop, start the tunnel first,
+then `serve`. The commands for this checkout are in
+[SSH Reverse Proxy](ssh-reverse-proxy.md).

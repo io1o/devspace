@@ -73,6 +73,10 @@ DevSpace does not manage tunnels. Your tunnel or reverse proxy should point to:
 http://127.0.0.1:7676
 ```
 
+An SSH reverse tunnel plus Caddy on your own server is documented in
+[SSH Reverse Proxy](ssh-reverse-proxy.md). DevSpace still does not own that
+tunnel: if the SSH session or `serve` process dies, bring them back yourself.
+
 Prefer adding Cloudflare Access, Tailscale identity controls, or equivalent
 protection in front of public tunnels. DevSpace OAuth still protects the MCP
 endpoint, but the tunnel URL should not be treated as a secret.

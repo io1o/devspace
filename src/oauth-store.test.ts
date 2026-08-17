@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { InvalidGrantError, InvalidTokenError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
+import { InvalidGrantError, InvalidRequestError, InvalidTokenError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import { databasePath, openDatabase } from "./db/client.js";
 import { SingleUserOAuthProvider } from "./oauth-provider.js";
 import { SqliteOAuthClientsStore, SqliteOAuthStore } from "./oauth-store.js";
@@ -25,6 +25,7 @@ try {
   testExpiredTokenCleanup(join(root, "expiration"));
   testTransactionalTokenRotation(join(root, "rotation"));
   await testProviderRestartRotationAndRevocation(join(root, "provider"));
+  testRejectedRedirectHost(join(root, "rejected-redirect"));
 } finally {
   await rm(root, { recursive: true, force: true });
 }
@@ -242,6 +243,25 @@ async function testProviderRestartRotationAndRevocation(stateDir: string): Promi
     );
   } finally {
     secondProvider.close();
+  }
+}
+
+function testRejectedRedirectHost(stateDir: string): void {
+  const store = new SqliteOAuthStore(stateDir);
+  try {
+    assert.throws(
+      () =>
+        new SqliteOAuthClientsStore(store, ["chatgpt.com"]).registerClient({
+          redirect_uris: ["https://okapi.example.com/oauth/callback"],
+          client_name: "Okapi",
+        }),
+      (error: unknown) =>
+        error instanceof InvalidRequestError
+        && error.message.includes("okapi.example.com")
+        && error.message.includes("DEVSPACE_OAUTH_ALLOWED_REDIRECT_HOSTS"),
+    );
+  } finally {
+    store.close();
   }
 }
 

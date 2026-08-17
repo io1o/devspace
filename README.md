@@ -178,6 +178,7 @@ devspace doctor
 ## Documentation
 
 - [Setup Guide](https://github.com/Waishnav/devspace/blob/main/docs/setup.md)
+- [SSH Reverse Proxy](https://github.com/Waishnav/devspace/blob/main/docs/ssh-reverse-proxy.md)
 - [ChatGPT Coding Workflow](https://github.com/Waishnav/devspace/blob/main/docs/chatgpt-coding-workflow.md)
 - [Configuration Reference](https://github.com/Waishnav/devspace/blob/main/docs/configuration.md)
 - [Native File Download](https://github.com/Waishnav/devspace/blob/main/docs/artifact-exchange.md)

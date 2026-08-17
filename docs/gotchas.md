@@ -65,6 +65,17 @@ If you saved the wrong value:
 npx @waishnav/devspace config set publicBaseUrl https://your-tunnel-host.example.com
 ```
 
+## SSH Tunnel Or Serve Stopped
+
+The SSH reverse tunnel and `devspace serve` run on the local machine. They do
+not come back after reboot, an SSH drop, or a closed terminal.
+
+For this checkout, start them again with the commands in
+[SSH Reverse Proxy](ssh-reverse-proxy.md).
+
+`serve` must stay in the foreground. If it prints `listening` and then returns
+to the shell, another process may already hold `127.0.0.1:7676`.
+
 ## Tunnel URL Changed
 
 Temporary tunnels often change URLs between runs.
@@ -108,6 +119,10 @@ By default, DevSpace allows redirects for:
 chatgpt.com
 localhost
 127.0.0.1
+www.cursor.com
+cursor.com
+anysphere.cursor-mcp
+mcp
 ```
 
 If another MCP client uses a different redirect host, configure:
@@ -115,6 +130,9 @@ If another MCP client uses a different redirect host, configure:
 ```bash
 DEVSPACE_OAUTH_ALLOWED_REDIRECT_HOSTS="chatgpt.com,example.com" npx @waishnav/devspace serve
 ```
+
+The error names the rejected hostname. This checkout's Okapi/Cursor hosts are listed in
+[SSH Reverse Proxy](ssh-reverse-proxy.md).
 
 ## Owner Password Not Accepted
 

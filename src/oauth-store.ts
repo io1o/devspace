@@ -57,8 +57,20 @@ export class SqliteOAuthStore {
     client: Omit<OAuthClientInformationFull, "client_id" | "client_id_issued_at">,
     allowedRedirectHosts: string[],
   ): OAuthClientInformationFull {
-    if (!client.redirect_uris.every((uri) => redirectHostAllowed(String(uri), allowedRedirectHosts))) {
-      throw new InvalidRequestError("Client redirect_uri is not allowed for this DevSpace server");
+    const rejectedRedirectUris = client.redirect_uris
+      .map((uri) => String(uri))
+      .filter((uri) => !redirectHostAllowed(uri, allowedRedirectHosts));
+    if (rejectedRedirectUris.length > 0) {
+      const rejectedHosts = rejectedRedirectUris.map((uri) => {
+        try {
+          return new URL(uri).hostname || uri;
+        } catch {
+          return uri;
+        }
+      });
+      throw new InvalidRequestError(
+        `Client redirect_uri is not allowed for this DevSpace server (${rejectedHosts.join(", ")}). Set DEVSPACE_OAUTH_ALLOWED_REDIRECT_HOSTS to include that hostname.`,
+      );
     }
 
     const now = Math.floor(Date.now() / 1000);

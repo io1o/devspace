@@ -109,6 +109,10 @@ assert.deepEqual(loadConfig(baseEnv).oauth.allowedRedirectHosts, [
   "chatgpt.com",
   "localhost",
   "127.0.0.1",
+  "www.cursor.com",
+  "cursor.com",
+  "anysphere.cursor-mcp",
+  "mcp",
 ]);
 assert.equal(loadConfig(baseEnv).oauth.accessTokenTtlSeconds, 3600);
 assert.equal(loadConfig(baseEnv).oauth.refreshTokenTtlSeconds, 2592000);
